@@ -8,6 +8,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn import svm
 import mne
 import sys
+import os
 from mne.datasets import eegbci
 from mne.io import concatenate_raws, read_raw_edf
 from mne.channels import make_standard_montage
@@ -119,7 +120,7 @@ def run_grid_search(freq, features, csp_reg, csp_n, runs, cv, viz):
         for i in range(1, 110):
             X, y, _ = fetch_data(i, viz, features, freq, r)
             pipe = create_pipe_grid(csp_n, csp_reg)
-            score = cross_val_score(pipe, X, y, cv=cv, n_jobs=-1)
+            score = cross_val_score(pipe, X, y, cv=cv, n_jobs=1)
             scores.append(np.mean(score).round(3))
         run_score.append(np.mean(scores).round(3))
     avg_run_score = np.mean(run_score).round(3)
@@ -130,11 +131,12 @@ def main():
     scores = []
     results = []
     viz = False
+    max_threads = os.cpu_count()
     if '-v' in sys.argv:
         viz = True
     start = time.time()
     pipe = create_pipeline()
-    cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     print(f'time elapsed after create pipe: {time.time() - start:.2f}')
     start = time.time()
     if 'all' in sys.argv:
@@ -157,7 +159,7 @@ def main():
                               for csp_reg in [None, 0.06, 0.08, 0.1, 0.12, 0.15]
                               for csp_n in [4, 5, 6, 7, 8]]
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(run_grid_search, freq, features, csp_reg, csp_n, runs, cv, viz) for (freq, features, csp_reg, csp_n) in param_combinations]
 
             for future in as_completed(futures):
